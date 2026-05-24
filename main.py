@@ -3,6 +3,8 @@ from typing import Any
 
 with open("config.json") as f:
     config = json.load(f)
+with open("history.json") as f:
+    history: list[tuple[int, str, str]] = json.load(f)
 
 channel_id = config["channel-id"]
 message_id = config["message-id"]
@@ -11,9 +13,8 @@ words = config["words"]
 token = config["token"]
 client = discord.Client()
 
-# get counts of each word for each user found
-async def count(channel: discord.TextChannel, history: list[tuple[int, str, str]]) -> dict[str, dict[str, int]]:
-    # fetch recent history
+# fetch recent history
+async def fetch(channel: discord.TextChannel) -> None:
     limit = 100_000
     n_messages = 0
     old_ids = {x[0] for x in history}
@@ -28,7 +29,9 @@ async def count(channel: discord.TextChannel, history: list[tuple[int, str, str]
         if n_messages % 1000 == 0:
             print(f"{n_messages // 1000}%")
     print("fetched message history")
-    # calculate values
+
+# get counts of each word for each user found
+def count() -> dict[str, dict[str, int]]:
     counts = {}
     for _, name, text in history:
         if name not in counts:
@@ -63,6 +66,16 @@ def table(data: dict[str, Any]) -> str:
         string += "\n"
     return string
 
+# recount words and update message
+async def update() -> None:
+    channel = client.get_channel(channel_id)
+    if channel is None:
+        print("Channel not found. Check ID.")
+        return
+    message = await channel.fetch_message(message_id)
+    text = f"```{table(percentages(count()))}```"
+    await message.edit(content=text)
+
 @client.event
 async def on_ready() -> None:
     print(f"Logged in as {client.user}")
@@ -70,12 +83,16 @@ async def on_ready() -> None:
     if channel is None:
         print("Channel not found. Check ID.")
         return
-    with open("history.json") as f:
-        history = json.load(f)
-    message = await channel.fetch_message(message_id)
-    text = "```" + table(percentages(await count(channel, history))) + "```"
-    await message.edit(content=text)
+    await fetch(channel)
+    await update()
     with open("history.json", "w") as f:
         json.dump(history, f)
+
+@client.event
+async def on_message(message: discord.Message) -> None:
+    if message.channel.id != channel_id:
+        return
+    history.append((message.id, message.author.name, message.content.lower()))
+    await update()
 
 client.run(token)
