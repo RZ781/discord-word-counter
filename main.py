@@ -85,8 +85,10 @@ async def on_ready() -> None:
         return
     await fetch(channel)
     await update()
-    with open("history.json", "w") as f:
-        json.dump(history, f)
+    while True:
+        with open("history.json", "w") as f:
+            json.dump(history, f)
+        await asyncio.sleep(60)
 
 @client.event
 async def on_message(message: discord.Message) -> None:
