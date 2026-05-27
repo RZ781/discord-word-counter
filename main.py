@@ -3,15 +3,17 @@ from typing import Any
 
 with open("config.json") as f:
     config = json.load(f)
-with open("history.json") as f:
-    history: list[tuple[int, str, str]] = json.load(f)
 
 channel_id = config["channel-id"]
 message_id = config["message-id"]
+history_file = config["history-file"]
 alternatives = config["alternatives"]
 words = config["words"]
 token = config["token"]
 client = discord.Client()
+
+with open(history_file) as f:
+    history: list[tuple[int, str, str]] = json.load(f)
 
 # fetch recent history
 async def fetch(channel: discord.TextChannel) -> None:
@@ -86,7 +88,7 @@ async def on_ready() -> None:
     await fetch(channel)
     await update()
     while True:
-        with open("history.json", "w") as f:
+        with open(history_file, "w") as f:
             json.dump(history, f)
         await asyncio.sleep(60)
 
