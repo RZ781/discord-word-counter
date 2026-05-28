@@ -76,7 +76,8 @@ async def update() -> None:
         return
     message = await channel.fetch_message(message_id)
     text = f"```{table(percentages(count()))}```"
-    await message.edit(content=text)
+    if message.content != text:
+        await message.edit(content=text)
 
 @client.event
 async def on_ready() -> None:
