@@ -1,4 +1,4 @@
-import discord, asyncio, json
+import discord, asyncio, json, os
 from typing import Any
 
 with open("config.json") as f:
@@ -12,8 +12,11 @@ words = config["words"]
 token = config["token"]
 client = discord.Client()
 
-with open(history_file) as f:
-    history: list[tuple[int, str, str]] = json.load(f)
+if os.path.isfile(history_file):
+    with open(history_file) as f:
+        history: list[tuple[int, str, str]] = json.load(f)
+else:
+    history = []
 
 # fetch recent history
 async def fetch(channel: discord.TextChannel) -> None:
