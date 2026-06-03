@@ -1,0 +1,10 @@
+{
+	"channel-id": <channel-id>,
+	"message-id": <message-id>,
+	"history-file": "history.json",
+	"token": "<discord-token>",
+	"words": ["1", "2", "3"],
+	"alternatives": {
+		"1": ["one"]
+	}
+}
