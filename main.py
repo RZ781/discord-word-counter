@@ -1,7 +1,11 @@
-import discord, asyncio, json, os
+import argparse, asyncio, discord, json, os
 from typing import Any
 
-with open("config.json") as f:
+parser = argparse.ArgumentParser(description="Discord bot to count words used")
+parser.add_argument("--config", default="config.json", help="json config file")
+args = parser.parse_args()
+
+with open(args.config) as f:
     config = json.load(f)
 
 channel_id = config["channel-id"]
