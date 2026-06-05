@@ -8,22 +8,27 @@ args = parser.parse_args()
 with open(args.config) as f:
     config = json.load(f)
 
-channel_id = config["channel-id"]
-message_id = config["message-id"]
-history_file = config["history-file"]
-alternatives = config["alternatives"]
-words = config["words"]
+def get_config_option(channel: int, option: str) -> Any:
+    if option in config["channels"][channel]:
+        return config["channels"][channel][option]
+    if option in config:
+        return config[option]
+    return None
+
 token = config["token"]
 client = discord.Client()
+histories: list[list[tuple[int, str, str]]] = []
 
-if os.path.isfile(history_file):
-    with open(history_file) as f:
-        history: list[tuple[int, str, str]] = json.load(f)
-else:
-    history = []
+for channel in config["channels"]:
+    history_file = channel["history-file"]
+    if os.path.isfile(history_file):
+        with open(history_file) as f:
+            histories.append(json.load(f))
+    else:
+        histories.append([])
 
 # fetch recent history
-async def fetch(channel: discord.TextChannel) -> None:
+async def fetch(channel: discord.TextChannel, history: list[tuple[int, str, str]]) -> None:
     limit = 100_000
     n_messages = 0
     old_ids = {x[0] for x in history}
@@ -37,10 +42,10 @@ async def fetch(channel: discord.TextChannel) -> None:
         n_messages += 1
         if n_messages % 1000 == 0:
             print(f"{n_messages // 1000}%")
-    print("fetched message history")
+    print("fetched message history in", channel.name)
 
 # get counts of each word for each user found
-def count() -> dict[str, dict[str, int]]:
+def count(history: list[tuple[int, str, str]], words: list[str], alternatives: dict[str, list[str]]) -> dict[str, dict[str, int]]:
     counts = {}
     for _, name, text in history:
         if name not in counts:
@@ -59,11 +64,11 @@ def count() -> dict[str, dict[str, int]]:
     return counts
 
 # convert counts of words to percentages
-def percentages(data: dict[str, dict[str, int]]) -> dict[str, dict[str, float]]:
+def percentages(data: dict[str, dict[str, int]], words: list[str]) -> dict[str, dict[str, float]]:
     return {name: {word: round(data[name][word] / data[name]["total"] * 100, 2) for word in words} for name in data}
 
 # format nested dictionary as an ascii table
-def table(data: dict[str, Any]) -> str:
+def table(data: dict[str, Any], words: list[str]) -> str:
     array = [[""] + list(words)] + [[name] + [str(data[name][word]) for word in words] for name in data]
     col_widths = []
     for i in range(len(words) + 1):
@@ -77,34 +82,40 @@ def table(data: dict[str, Any]) -> str:
 
 # recount words and update message
 async def update() -> None:
-    channel = client.get_channel(channel_id)
-    if channel is None:
-        print("Channel not found. Check ID.")
-        return
-    message = await channel.fetch_message(message_id)
-    text = f"```{table(percentages(count()))}```"
-    if message.content != text:
-        await message.edit(content=text)
+    for i, channel in enumerate(config["channels"]):
+        discord_channel = client.get_channel(channel["channel-id"])
+        if discord_channel is None:
+            print("Channel not found. Check ID.")
+            return
+        message = await discord_channel.fetch_message(channel["message-id"])
+        words = get_config_option(i, "words")
+        counts = count(histories[i], words, get_config_option(i, "alternatives"))
+        text = f"```{table(percentages(counts, words), words)}```"
+        if message.content != text:
+            await message.edit(content=text)
 
 @client.event
 async def on_ready() -> None:
     print(f"Logged in as {client.user}")
-    channel = client.get_channel(channel_id)
-    if channel is None:
-        print("Channel not found. Check ID.")
-        return
-    await fetch(channel)
+    for i, channel in enumerate(config["channels"]):
+        discord_channel = client.get_channel(channel["channel-id"])
+        if discord_channel is None:
+            print("Channel not found. Check ID.")
+            return
+        await fetch(discord_channel, histories[i])
     await update()
     while True:
-        with open(history_file, "w") as f:
-            json.dump(history, f)
+        for i, channel in enumerate(config["channels"]):
+            with open(channel["history-file"], "w") as f:
+                json.dump(histories[i], f)
         await asyncio.sleep(60)
 
 @client.event
 async def on_message(message: discord.Message) -> None:
-    if message.channel.id != channel_id:
-        return
-    history.append((message.id, message.author.name, message.content.lower()))
-    await update()
+    for i, channel in enumerate(config["channels"]):
+        if message.channel.id != channel["channel-id"]:
+            continue
+        histories[i].append((message.id, message.author.name, message.content.lower()))
+        await update()
 
 client.run(token)
