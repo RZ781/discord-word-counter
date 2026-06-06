@@ -28,9 +28,9 @@ for channel in config["channels"]:
         histories.append([])
 
 # fetch recent history
-async def fetch(channel: discord.TextChannel, history: list[tuple[int, str, str]]) -> None:
-    limit = 100_000
+async def fetch(channel: discord.TextChannel, history: list[tuple[int, str, str]], limit) -> None:
     n_messages = 0
+    percent = limit // 100
     old_ids = {x[0] for x in history}
     async for message in channel.history(limit=limit):
         name = message.author.name
@@ -40,8 +40,8 @@ async def fetch(channel: discord.TextChannel, history: list[tuple[int, str, str]
             break
         history.append((msg_id, name, text))
         n_messages += 1
-        if n_messages % 1000 == 0:
-            print(f"{n_messages // 1000}%")
+        if n_messages % percent == 0:
+            print(f"{n_messages // percent}%")
     print("fetched message history in", channel.name)
 
 # get counts of each word for each user found
@@ -102,7 +102,7 @@ async def on_ready() -> None:
         if discord_channel is None:
             print("Channel not found. Check ID.")
             return
-        await fetch(discord_channel, histories[i])
+        await fetch(discord_channel, histories[i], get_config_option(i, "limit"))
     await update()
     while True:
         for i, channel in enumerate(config["channels"]):

@@ -1,5 +1,6 @@
 {
 	"token": "<discord-token>",
+	"limit": 1000,
 	"words": ["1", "2", "3"],
 	"alternatives": {
 		"1": ["one"]
