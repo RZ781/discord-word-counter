@@ -28,7 +28,7 @@ for channel in config["channels"]:
         histories.append([])
 
 # fetch recent history
-async def fetch(channel: discord.TextChannel, history: list[tuple[int, str, str]], limit) -> None:
+async def fetch(channel: discord.TextChannel, history: list[tuple[int, str, str]], limit: int) -> None:
     n_messages = 0
     percent = limit // 100
     old_ids = {x[0] for x in history}
@@ -87,12 +87,19 @@ async def update() -> None:
         if discord_channel is None:
             print("Channel not found. Check ID.")
             return
-        message = await discord_channel.fetch_message(channel["message-id"])
         words = get_config_option(i, "words")
         counts = count(histories[i], words, get_config_option(i, "alternatives"))
         text = f"```{table(percentages(counts, words), words)}```"
-        if message.content != text:
-            await message.edit(content=text)
+        while channel["message-id"] == 0:
+            await asyncio.sleep(0)
+        if channel["message-id"] is None:
+            channel["message-id"] = 0
+            message = await discord_channel.send(text)
+            channel["message-id"] = message.id
+        else:
+            message = await discord_channel.fetch_message(channel["message-id"])
+            if message.content != text:
+                await message.edit(content=text)
 
 @client.event
 async def on_ready() -> None:

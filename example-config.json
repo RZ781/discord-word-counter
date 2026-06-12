@@ -6,6 +6,6 @@
 		"1": ["one"]
 	},
 	"channels": [
-		{"channel-id": <channel-id>, "message-id": <message-id>, "history-file": "history.json"}
+		{"channel-id": <channel-id>, "message-id": null, "history-file": "history.json"}
 	]
 }
