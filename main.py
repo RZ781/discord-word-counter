@@ -16,7 +16,11 @@ def get_config_option(channel: int, option: str) -> Any:
     return None
 
 token = config["token"]
-client = discord.Client()
+intents = discord.Intents.none()
+intents.guilds = True
+intents.message_content = True
+intents.messages = True
+client = discord.Client(intents=intents)
 histories: list[list[tuple[int, str, str]]] = []
 
 for channel in config["channels"]:
