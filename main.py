@@ -15,13 +15,15 @@ def get_config_option(channel: int, option: str) -> Any:
         return config[option]
     return None
 
+History = list[tuple[int, str, str]]
+
 token = config["token"]
 intents = discord.Intents.none()
 intents.guilds = True
 intents.message_content = True
 intents.messages = True
 client = discord.Client(intents=intents)
-histories: list[list[tuple[int, str, str]]] = []
+histories: list[History] = []
 
 for channel in config["channels"]:
     history_file = channel["history-file"]
@@ -31,11 +33,13 @@ for channel in config["channels"]:
     else:
         histories.append([])
 
+initial_histories = [history.copy() for history in histories]
+
 # fetch recent history
-async def fetch(channel: discord.TextChannel, history: list[tuple[int, str, str]], limit: int) -> None:
+async def fetch(channel: discord.TextChannel, history: History, initial_history: History, limit: int) -> None:
     n_messages = 0
     percent = limit // 100
-    old_ids = {x[0] for x in history}
+    old_ids = {msg_id for msg_id, _, _ in initial_history}
     async for message in channel.history(limit=limit):
         name = message.author.name
         text = message.content.lower()
@@ -84,7 +88,7 @@ def table(data: dict[str, Any], words: list[str]) -> str:
         string += "\n"
     return string
 
-# recount words and update message
+# recount words and update or create message
 async def update() -> None:
     for i, channel in enumerate(config["channels"]):
         discord_channel = client.get_channel(channel["channel-id"])
@@ -94,6 +98,7 @@ async def update() -> None:
         words = get_config_option(i, "words")
         counts = count(histories[i], words, get_config_option(i, "alternatives"))
         text = f"```{table(percentages(counts, words), words)}```"
+        # message-id is temporarily set to 0 to prevent bot from sending multiple messages
         while channel["message-id"] == 0:
             await asyncio.sleep(0)
         if channel["message-id"] is None:
@@ -113,7 +118,7 @@ async def on_ready() -> None:
         if discord_channel is None:
             print("Channel not found. Check ID.")
             return
-        await fetch(discord_channel, histories[i], get_config_option(i, "limit"))
+        await fetch(discord_channel, histories[i], initial_histories[i], get_config_option(i, "limit"))
     await update()
     while True:
         for i, channel in enumerate(config["channels"]):
