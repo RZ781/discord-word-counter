@@ -8,9 +8,9 @@ args = parser.parse_args()
 with open(args.config) as f:
     config = json.load(f)
 
-def get_config_option(channel: int, option: str) -> Any:
-    if option in config["channels"][channel]:
-        return config["channels"][channel][option]
+def get_config_option(channel: dict[str, Any], option: str) -> Any:
+    if option in channel:
+        return channel[option]
     if option in config:
         return config[option]
     return None
@@ -23,23 +23,23 @@ intents.guilds = True
 intents.message_content = True
 intents.messages = True
 client = discord.Client(intents=intents)
-histories: list[History] = []
 
 for channel in config["channels"]:
     history_file = channel["history-file"]
     if os.path.isfile(history_file):
         with open(history_file) as f:
-            histories.append(json.load(f))
+            channel["history"] = json.load(f)
     else:
-        histories.append([])
-
-initial_histories = [history.copy() for history in histories]
+        channel["history"] = []
+    channel["initial-history"] = channel["history"].copy()
 
 # fetch recent history
-async def fetch(channel: discord.TextChannel, history: History, initial_history: History, limit: int) -> None:
+async def fetch(channel: discord.TextChannel, channel_config: dict[str, Any]) -> None:
+    limit = get_config_option(channel_config, "limit")
     n_messages = 0
     percent = limit // 100
-    old_ids = {msg_id for msg_id, _, _ in initial_history}
+    old_ids = {msg_id for msg_id, _, _ in channel_config["initial-history"]}
+    history = channel_config["history"]
     async for message in channel.history(limit=limit):
         name = message.author.name
         text = message.content.lower()
@@ -95,8 +95,8 @@ async def update() -> None:
         if discord_channel is None:
             print("Channel not found. Check ID.")
             return
-        words = get_config_option(i, "words")
-        counts = count(histories[i], words, get_config_option(i, "alternatives"))
+        words = get_config_option(channel, "words")
+        counts = count(channel["history"], words, get_config_option(channel, "alternatives"))
         text = f"```{table(percentages(counts, words), words)}```"
         # message-id is temporarily set to 0 to prevent bot from sending multiple messages
         while channel["message-id"] == 0:
@@ -118,12 +118,12 @@ async def on_ready() -> None:
         if discord_channel is None:
             print("Channel not found. Check ID.")
             return
-        await fetch(discord_channel, histories[i], initial_histories[i], get_config_option(i, "limit"))
+        await fetch(discord_channel, channel)
     await update()
     while True:
         for i, channel in enumerate(config["channels"]):
             with open(channel["history-file"], "w") as f:
-                json.dump(histories[i], f)
+                json.dump(channel["history"], f)
         await asyncio.sleep(60)
 
 @client.event
@@ -131,7 +131,7 @@ async def on_message(message: discord.Message) -> None:
     for i, channel in enumerate(config["channels"]):
         if message.channel.id != channel["channel-id"]:
             continue
-        histories[i].append((message.id, message.author.name, message.content.lower()))
+        channel["history"].append((message.id, message.author.name, message.content.lower()))
         await update()
 
 client.run(token)
