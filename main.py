@@ -1,4 +1,4 @@
-import argparse, asyncio, discord, json, os
+import argparse, asyncio, discord.ext.commands, json, os
 from typing import Any
 
 parser = argparse.ArgumentParser(description="Discord bot to count words used")
@@ -17,12 +17,11 @@ def get_config_option(channel: dict[str, Any], option: str) -> Any:
 
 History = list[tuple[int, str, str]]
 
-token = config["token"]
 intents = discord.Intents.none()
 intents.guilds = True
 intents.message_content = True
 intents.messages = True
-client = discord.Client(intents=intents)
+client = discord.ext.commands.Bot(command_prefix="!", intents=intents)
 
 for channel in config["channels"]:
     history_file = channel["history-file"]
@@ -84,13 +83,13 @@ def table(data: dict[str, Any], words: list[str]) -> str:
     string = ""
     for row in array:
         for i, col in enumerate(row):
-            string += col + " " * (col_widths[i]+3-len(col))
+            string += col + " " * (col_widths[i] + 3 - len(col))
         string += "\n"
     return string
 
 # recount words and update or create message
 async def update() -> None:
-    for i, channel in enumerate(config["channels"]):
+    for channel in config["channels"]:
         discord_channel = client.get_channel(channel["channel-id"])
         if discord_channel is None:
             print("Channel not found. Check ID.")
@@ -113,7 +112,7 @@ async def update() -> None:
 @client.event
 async def on_ready() -> None:
     print(f"Logged in as {client.user}")
-    for i, channel in enumerate(config["channels"]):
+    for channel in config["channels"]:
         discord_channel = client.get_channel(channel["channel-id"])
         if discord_channel is None:
             print("Channel not found. Check ID.")
@@ -121,17 +120,46 @@ async def on_ready() -> None:
         await fetch(discord_channel, channel)
     await update()
     while True:
-        for i, channel in enumerate(config["channels"]):
+        for channel in config["channels"]:
             with open(channel["history-file"], "w") as f:
                 json.dump(channel["history"], f)
         await asyncio.sleep(60)
 
 @client.event
 async def on_message(message: discord.Message) -> None:
-    for i, channel in enumerate(config["channels"]):
+    await client.process_commands(message)
+    for channel in config["channels"]:
         if message.channel.id != channel["channel-id"]:
             continue
         channel["history"].append((message.id, message.author.name, message.content.lower()))
         await update()
 
-client.run(token)
+@client.command()
+async def search(context: discord.ext.commands.Context, *search_terms: str) -> None:
+    for channel in config["channels"]:
+        if context.channel.id != channel["channel-id"]:
+            continue
+        results = ""
+        count = 0
+        for msg_id, author_name, content in channel["history"]:
+            matches = True
+            for search_term in search_terms:
+                if search_term not in content:
+                    matches = False
+                    break
+            if matches:
+                try:
+                    message = await context.channel.fetch_message(msg_id)
+                    url = message.jump_url
+                except:
+                    url = "(deleted)"
+                content = content[:100].replace("\n", "\n> ")
+                results += f"{author_name}: {url}\n> {content}\n"
+                count += 1
+                if count >= 10:
+                    break
+        if results == "":
+            results = "No results found"
+        await context.send(results)
+
+client.run(config["token"])
