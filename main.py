@@ -17,11 +17,7 @@ def get_config_option(channel: dict[str, Any], option: str) -> Any:
 
 History = list[tuple[int, str, str]]
 
-intents = discord.Intents.none()
-intents.guilds = True
-intents.message_content = True
-intents.messages = True
-client = discord.ext.commands.Bot(command_prefix="!", intents=intents)
+client = discord.ext.commands.Bot(command_prefix="!", self_bot=True)
 
 for channel in config["channels"]:
     history_file = channel["history-file"]
