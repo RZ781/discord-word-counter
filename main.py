@@ -134,10 +134,9 @@ async def on_message(message: discord.Message) -> None:
         channel["history"].append((message.id, message.author.name, message.content.lower()))
         await update()
 
-@client.command()
-async def search(context: discord.ext.commands.Context, *search_terms: str) -> None:
+async def search(discord_channel: discord.Channel, search_terms: list[str]) -> None:
     for channel in config["channels"]:
-        if context.channel.id != channel["channel-id"]:
+        if discord_channel.id != channel["channel-id"]:
             continue
         results = ""
         count = 0
@@ -149,7 +148,7 @@ async def search(context: discord.ext.commands.Context, *search_terms: str) -> N
                     break
             if matches:
                 try:
-                    message = await context.channel.fetch_message(msg_id)
+                    message = await discord_channel.fetch_message(msg_id)
                     url = message.jump_url
                 except:
                     url = "(deleted)"
@@ -160,6 +159,25 @@ async def search(context: discord.ext.commands.Context, *search_terms: str) -> N
                     break
         if results == "":
             results = "No results found"
-        await context.send(results)
+        return results
+    return None
+
+@client.command(name="search")
+async def search_command(context: discord.ext.commands.Context, *search_terms: str) -> None:
+    response = await search(context.channel, search_terms)
+    if response is not None:
+        await context.send(response)
+
+@client.tree.command(name="search")
+async def search_slash(interaction: discord.Interaction, search_terms: str) -> None:
+    response = await search(interaction.channel, search_terms.split(" "))
+    if response is not None:
+        await interaction.response.send_message(response)
+
+@client.command()
+async def sync(context: discord.ext.commands.Context) -> None:
+    if context.author.id in config["admins"]:
+        await client.tree.sync()
+        await context.send("Synced commands")
 
 client.run(config["token"])

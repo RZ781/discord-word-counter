@@ -1,5 +1,6 @@
 {
 	"token": "<discord-token>",
+	"admins": [<admin-user-id>],
 	"limit": 1000,
 	"words": ["1", "2", "3"],
 	"alternatives": {
